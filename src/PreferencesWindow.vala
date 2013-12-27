@@ -1,7 +1,4 @@
 using Gtk;
-using Notify;
-using WebKit;
-using Soup;
 
 public class PreferencesWindow : Window {
 	public Preferences preferences;

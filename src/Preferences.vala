@@ -1,8 +1,3 @@
-using Gtk;
-using Notify;
-using WebKit;
-using Soup;
-
 public class Preferences {
 	private File settings_dir;
 	private File settings_file;
@@ -17,7 +12,7 @@ public class Preferences {
 	private bool validate_files () {
 		var home_dir = File.new_for_path (Environment.get_home_dir ());
 		settings_file = home_dir.get_child (".config").
-			get_child ("gnome-sms-intercepter").get_child ("settings.json");
+			get_child ("gnome-sms-client").get_child ("settings.json");
 		settings_dir = settings_file.get_parent ();
 		if (!settings_dir.query_exists ()) {
 			try {
@@ -64,8 +59,11 @@ public class Preferences {
 				
 				var parser = new Json.Parser ();
 				parser.load_from_data (settings_json, -1);
-				var root_object = parser.get_root ().get_object ();
-				refresh_token = root_object.get_string_member ("refresh_token");
+				if (parser.get_root () != null) {
+					var root_object = parser.get_root ().get_object ();
+					if (root_object != null)
+						refresh_token = root_object.get_string_member ("refresh_token");
+				}
 			} catch (Error e) {
 				stderr.printf ("%s\n", e.message);
 				return false;
@@ -87,21 +85,22 @@ public class Preferences {
 			
 				var parser = new Json.Parser ();
 				parser.load_from_data (settings_json, -1);
-				Json.Object? root_object;
-				root_object = parser.get_root ().get_object ();
-				var generator = new Json.Generator ();
-				if (root_object != null) {
-					root_object.set_string_member ("refresh_token", refresh_token);
-					generator.set_root (parser.get_root ());
-				} else {
-					// file is more or less empty; create new json root
-					var root = new Json.Node (Json.NodeType.OBJECT);
-					root_object = new Json.Object ();
-					root_object.set_string_member ("refresh_token", refresh_token);
-					root.set_object (root_object);
-					generator.set_root (root);
+				if (parser.get_root() != null) {
+					Json.Object? root_object = parser.get_root ().get_object ();
+					var generator = new Json.Generator ();
+					if (root_object != null) {
+						root_object.set_string_member ("refresh_token", refresh_token);
+						generator.set_root (parser.get_root ());
+					} else {
+						// file is more or less empty; create new json root
+						var root = new Json.Node (Json.NodeType.OBJECT);
+						root_object = new Json.Object ();
+						root_object.set_string_member ("refresh_token", refresh_token);
+						root.set_object (root_object);
+						generator.set_root (root);
+					}
+					generator.to_file (settings_file.get_path ());
 				}
-				generator.to_file (settings_file.get_path ());
 			} catch (Error e) {
 				stderr.printf ("%s\n", e.message);
 				return false;

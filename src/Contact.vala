@@ -1,8 +1,3 @@
-using Gtk;
-using Notify;
-using WebKit;
-using Soup;
-
 public class Contact {
 	public string ID;
 	public string Name;
@@ -26,10 +21,20 @@ public class Contact {
 	}
 	
 	public void send_message (int64 timestamp, string text) {
-		Message_List.add (new Message (Utils.random_string (32), "", timestamp, text));
+		Message_List.add (new Message (random_string (32), "", timestamp, text));
 	}
 	
 	public void receive_message (string sender_phone, int64 timestamp, string text) {
-		Message_List.add (new Message (Utils.random_string (32), sender_phone, timestamp, text));
+		Message_List.add (new Message (random_string (32), sender_phone, timestamp, text));
+	}
+
+	private static string random_string (int len) {
+		string dictionary = "abcdefghijklmnopqrstuvw0123456789";
+		string rstr = "";
+		for (int i = 0; i < len; i++) {
+			int selector = Random.int_range (0, dictionary.length);
+			rstr += dictionary.substring (selector, 1);
+		}
+		return rstr;
 	}
 }

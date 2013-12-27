@@ -1,6 +1,3 @@
-using Gtk;
-using Notify;
-using WebKit;
 using Soup;
 
 public class RpcRequest {

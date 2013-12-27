@@ -40,7 +40,21 @@ public class MainWindow : Window {
 	private bool downloading_contacts = false;
 	
 	public MainWindow () {
-		this.title = "GNOME SMS Intercepter";
+		try {
+			Gdk.Screen screen = Gdk.Screen.get_default ();
+			CssProvider css_provider = new CssProvider ();
+			var css = "#phone_number_entry, #label_contact {font-size: larger} "
+				+ "#phone_number_entry {padding: 5px}";
+			css_provider.load_from_data (css, -1);
+			StyleContext.add_provider_for_screen (screen, css_provider,
+					Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		} catch (Error e) {
+			stderr.printf (e.message);
+		}
+
+		this.title = "GNOME SMS Client";
+		this.set_wmclass ("GNOME SMS Client", "GNOME SMS Client");
+		this.set_role ("MainWindow");
 		this.window_position = WindowPosition.CENTER;
 		this.set_default_size (600, 400);
 
@@ -109,23 +123,12 @@ public class MainWindow : Window {
 		toolbar.add (spinner_tool_item);
 
 		phone_number_entry = new Entry ();
+		phone_number_entry.name = "phone_number_entry";
 		phone_number_entry.margin = 10;
 		phone_number_entry.margin_bottom = 0;
-		Border border = Border () {
-			top = 5,
-			bottom = 5,
-			left = 5,
-			right = 5
-		};
-		phone_number_entry.set_inner_border (border);
-		var pango_context = this.create_pango_context ();
-		var font_desc = pango_context.get_font_description ();
-		font_desc.set_size ((int)Math.ceil (font_desc.get_size () * 1.25));
-		// 14 * Pango.SCALE
-		phone_number_entry.modify_font (font_desc);
-		
+				
 		label_contact = new Label ("Contact");
-		label_contact.modify_font (font_desc);
+		label_contact.name = "label_contact";
 		label_contact.margin = 10;
 		label_contact.margin_left = 13;
 		label_contact.margin_bottom = 0;
@@ -266,8 +269,12 @@ public class MainWindow : Window {
 		
 		preferences.load ();
 		contact_list = preferences.load_contact_list ();
+		if (contact_list.size > 0) {
+			loading_text_label.set_text ("Contact list loaded from file.");
+		} else {
+			loading_text_label.set_text ("Contact list empty.");
+		}
 		refresh_contact_list ();
-		loading_text_label.set_text ("Contact list loaded from file.");
 	}
 
 	bool on_incoming_connection (SocketConnection conn) {
@@ -434,66 +441,58 @@ public class MainWindow : Window {
 			spinner.start ();
 			this.show_all ();
 		
-			try {
-				Thread.create<void*> ( () => {
-					RpcRequest rpc = RpcRequest.get_instance ();
-					rpc.add_parameter ("client_id", "763353794495.apps.googleusercontent.com");
-					rpc.add_parameter ("client_secret", "r3cg_S00rEBJ_bNEVNL5dCge");
-					rpc.add_parameter ("refresh_token", preferences.refresh_token);
-					rpc.add_parameter ("grant_type", "refresh_token");
-					string json_response = rpc.send ("POST", "https://accounts.google.com/o/oauth2/token");
-		
-					loading_text_label.set_text ("Downloading contacts from Google...");
-					
-					try {
-						var parser = new Json.Parser ();
-						parser.load_from_data (json_response, -1);
-						var root_object = parser.get_root ().get_object ();
-						if (root_object.has_member ("error")) {
-							preferences.access_token = null;
-							preferences.refresh_token = null;
-						} else {
-							preferences.access_token = root_object.get_string_member ("access_token");
-						}
-					} catch (Error e) {
-						loading_text_label.set_text ("Failed to authenticate with Google.");
-						spinner_tool_item.remove (spinner);
+			new Thread<void*> ("dl", () => {
+				RpcRequest rpc = RpcRequest.get_instance ();
+				rpc.add_parameter ("client_id", "763353794495.apps.googleusercontent.com");
+				rpc.add_parameter ("client_secret", "r3cg_S00rEBJ_bNEVNL5dCge");
+				rpc.add_parameter ("refresh_token", preferences.refresh_token);
+				rpc.add_parameter ("grant_type", "refresh_token");
+				string json_response = rpc.send ("POST", "https://accounts.google.com/o/oauth2/token");
+	
+				loading_text_label.set_text ("Downloading contacts from Google...");
+				
+				try {
+					var parser = new Json.Parser ();
+					parser.load_from_data (json_response, -1);
+					var root_object = parser.get_root ().get_object ();
+					if (root_object.has_member ("error")) {
+						preferences.access_token = null;
 						preferences.refresh_token = null;
+					} else {
+						preferences.access_token = root_object.get_string_member ("access_token");
 					}
-					
-					Idle.add ( () => {
-						download_contacts_init ();
-						return false;
-					});
-					return null;
-				}, false);
-			} catch (ThreadError et) {
-				stderr.printf ("Thread error: %s\n", et.message);
-			}
+				} catch (Error e) {
+					loading_text_label.set_text ("Failed to authenticate with Google.");
+					spinner_tool_item.remove (spinner);
+					preferences.refresh_token = null;
+				}
+				
+				Idle.add ( () => {
+					download_contacts_init ();
+					return false;
+				});
+				return null;
+			});
 		}
 	}
 	
 	private void download_contacts_init () {
 		if (preferences.access_token != null) {
-			try {
-				Thread.create<void*> ( () => {
-					downloaded_list = new Gee.ArrayList<Contact> ();
-					string url = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&access_token=" + preferences.access_token;
-					string data = Utils.soup_get_json (url);
-					add_contacts_from_json (data);
-					contact_list = downloaded_list;
-					Idle.add ( () => {
-						refresh_contact_list ();
-						preferences.save_contact_list (contact_list);
-						loading_text_label.set_text ("Contact list up to date.");
-						spinner_tool_item.remove (spinner);
-						return false;
-					});
-					return null;
-				}, false);
-			} catch (ThreadError e) {
-				stderr.printf ("%s\n", e.message);
-			}
+			new Thread<void*> ("dlinit", () => {
+				downloaded_list = new Gee.ArrayList<Contact> ();
+				string url = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&access_token=" + preferences.access_token;
+				string data = soup_get_json (url);
+				add_contacts_from_json (data);
+				contact_list = downloaded_list;
+				Idle.add ( () => {
+					refresh_contact_list ();
+					preferences.save_contact_list (contact_list);
+					loading_text_label.set_text ("Contact list up to date.");
+					spinner_tool_item.remove (spinner);
+					return false;
+				});
+				return null;
+			});
 		} else {
 			download_contacts ();
 		}
@@ -538,7 +537,7 @@ public class MainWindow : Window {
 			var node_object = node.get_object ();
 			if (node_object.get_string_member ("rel") == "next") {
 				string url = node_object.get_string_member ("href") + "&access_token=" + preferences.access_token;
-				string data = Utils.soup_get_json (url);
+				string data = soup_get_json (url);
 				add_contacts_from_json (data);
 			}
 		}
@@ -546,7 +545,7 @@ public class MainWindow : Window {
 	
 	private void refresh_contact_list () {
 		listmodel.clear ();
-		if (contact_list.size  > 0) {
+		if (contact_list.size > 0) {
 			contact_list.sort((a,b) => {
 				return ((Contact)a).Name.ascii_casecmp(((Contact)b).Name);
 			});
@@ -577,7 +576,7 @@ public class MainWindow : Window {
 		message_box.set_hexpand (true);
 		message_box.margin_left = 10;
 		message_box.margin_right = 10;
-		
+
 		messages_scroll.add_with_viewport (message_box);
 		
 		message_pane.pack_start (messages_scroll, true, true, 0);
@@ -629,6 +628,13 @@ public class MainWindow : Window {
 		new_message_entry.set_buffer (buffer);
 		
 		this.show_all();
+	}
+
+	private static string soup_get_json (string url) {
+		var session = new Soup.SessionSync ();
+		var message = new Soup.Message ("GET", url);
+		session.send_message (message);
+		return (string)message.response_body.flatten ().data;
 	}
 
 }
