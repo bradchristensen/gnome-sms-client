@@ -1,7 +1,6 @@
-gnome-sms-client
-================
+# gnome-sms-client
 
-# Dependencies: #
+## Dependencies:
 
 * libgee-dev
 * libgtk-3-dev
