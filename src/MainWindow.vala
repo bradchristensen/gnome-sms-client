@@ -1,4 +1,5 @@
 using Gtk;
+using Gee;
 using Notify;
 using WebKit;
 using Soup;
@@ -29,8 +30,8 @@ public class MainWindow : Window {
 	private TextView new_message_entry;
 	private Toolbar notification_bar;
 	
-	private Gee.ArrayList<Contact> contact_list;
-	private Gee.ArrayList<Contact> downloaded_list;
+	private ArrayList<Contact> contact_list;
+	private ArrayList<Contact> downloaded_list;
 	
 	private Contact selected_contact;
 	private Contact no_contact;
@@ -252,7 +253,7 @@ public class MainWindow : Window {
 			}
 		});
 		
-		no_contact = new Contact ("", "Phone Number", new Gee.ArrayList<string> ());
+		no_contact = new Contact ("", "Phone Number", new ArrayList<string> ());
 		selected_contact = no_contact;
 		switch_message_box (selected_contact);
 		
@@ -308,7 +309,7 @@ public class MainWindow : Window {
 				}
 			}
 			if (sender == null) {
-				Gee.ArrayList<string> phone_numbers = new Gee.ArrayList<string> ();
+				ArrayList<string> phone_numbers = new ArrayList<string> ();
 				phone_numbers.add (phone_number);
 				Contact unknown_contact = new Contact (phone_number, phone_number, phone_numbers);
 				unknown_contact.receive_message (phone_number, timestamp, message);
@@ -350,7 +351,7 @@ public class MainWindow : Window {
 			container_box.pack_end (notification_bar, false, true, 0);
 			
 			this.show_all ();
-			var notify = new Notification (sender.Name, message, "info");
+			var notify = new Notify.Notification (sender.Name, message, "info");
 			notify.show ();
 		} catch (Error e) {
 			stderr.printf ("Server process error: %s\n", e.message);
@@ -479,7 +480,7 @@ public class MainWindow : Window {
 	private void download_contacts_init () {
 		if (preferences.access_token != null) {
 			new Thread<void*> ("dlinit", () => {
-				downloaded_list = new Gee.ArrayList<Contact> ();
+				downloaded_list = new ArrayList<Contact> ();
 				string url = "https://www.google.com/m8/feeds/contacts/default/full?alt=json&access_token=" + preferences.access_token;
 				string data = soup_get_json (url);
 				add_contacts_from_json (data);
@@ -516,7 +517,7 @@ public class MainWindow : Window {
 			var node_object = node.get_object ();
 			string contact_id = node_object.get_object_member ("id").get_string_member ("$t");
 			string contact_name = node_object.get_object_member ("title").get_string_member ("$t");
-			Gee.ArrayList<string> phone_numbers = new Gee.ArrayList<string> ();
+			ArrayList<string> phone_numbers = new ArrayList<string> ();
 			if (node_object.has_member ("gd$phoneNumber")) {
 				foreach (var ph_node in node_object.get_array_member ("gd$phoneNumber").get_elements ()) {
 					var ph_object = ph_node.get_object ();
